@@ -72,7 +72,20 @@ Captures voice input, converts it to text with Whisper, translates with NLLB, an
 
 - **Whisper (STT):** 99 languages for speech recognition / 99言語の音声認識
 - **NLLB-200 (Translation):** 200+ language pairs / 200+言語間の翻訳
-- **Piper (TTS):** Speech synthesis for supported languages (separate model per language) / 対応言語の音声合成（言語ごとにモデルが必要）
+- **Piper (TTS):** Speech synthesis for major languages / 主要言語の音声合成（言語ごとにモデルが必要）
+
+### Target Languages / 対応予定言語
+
+| Language / 言語 | STT | Translation / 翻訳 | TTS |
+|----------------|-----|-------------------|-----|
+| Japanese / 日本語 | ✅ | ✅ | ✅ |
+| Korean / 韓国語 | ✅ | ✅ | ✅ |
+| English / 英語 | ✅ | ✅ | ✅ |
+| French / フランス語 | ✅ | ✅ | ✅ |
+| German / ドイツ語 | ✅ | ✅ | ✅ |
+| Portuguese / ポルトガル語 | ✅ | ✅ | ✅ |
+| Russian / ロシア語 | ✅ | ✅ | ✅ |
+| Arabic / アラビア語 | ✅ | ✅ | ✅ |
 
 ## Development Setup / 開発環境セットアップ
 
