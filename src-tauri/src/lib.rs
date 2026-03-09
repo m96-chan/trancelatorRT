@@ -4,6 +4,7 @@ mod pipeline;
 
 use audio::capture::CaptureConfig;
 use audio::AudioPipeline;
+use commands::LanguageState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -13,6 +14,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(std::sync::Mutex::new(pipeline))
+        .manage(std::sync::Mutex::new(LanguageState::new()))
         .invoke_handler(tauri::generate_handler![
             commands::greet,
             commands::start_recording,
@@ -20,6 +22,10 @@ pub fn run() {
             commands::pause_recording,
             commands::resume_recording,
             commands::get_audio_state,
+            commands::get_languages,
+            commands::get_language_settings,
+            commands::set_source_language,
+            commands::set_target_language,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
