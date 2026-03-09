@@ -84,6 +84,19 @@ impl Language {
             _ => None,
         }
     }
+
+    pub fn piper_voice_name(&self) -> &'static str {
+        match self {
+            Language::Japanese => "ja_JP-kokoro-medium",
+            Language::Korean => "ko_KR-kss-medium",
+            Language::English => "en_US-lessac-medium",
+            Language::French => "fr_FR-siwis-medium",
+            Language::German => "de_DE-thorsten-medium",
+            Language::Portuguese => "pt_BR-faber-medium",
+            Language::Russian => "ru_RU-denis-medium",
+            Language::Arabic => "ar_JO-kareem-medium",
+        }
+    }
 }
 
 impl fmt::Display for Language {
@@ -308,6 +321,15 @@ mod tests {
         for lang in Language::all() {
             let code = lang.nllb_code();
             assert_eq!(Language::from_nllb_code(code), Some(*lang));
+        }
+    }
+
+    #[test]
+    fn test_language_piper_voice_names() {
+        assert!(!Language::Japanese.piper_voice_name().is_empty());
+        assert!(!Language::English.piper_voice_name().is_empty());
+        for lang in Language::all() {
+            assert!(lang.piper_voice_name().contains("-medium"));
         }
     }
 
