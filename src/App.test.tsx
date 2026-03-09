@@ -3,7 +3,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import App from "./App";
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(() => Promise.resolve()),
+  invoke: vi.fn((cmd: string) => {
+    if (cmd === "get_model_list") return Promise.resolve([]);
+    if (cmd === "get_storage_info")
+      return Promise.resolve({
+        total_bytes: 64_000_000_000,
+        available_bytes: 10_000_000_000,
+        models_bytes: 0,
+      });
+    return Promise.resolve();
+  }),
 }));
 
 import { invoke } from "@tauri-apps/api/core";
@@ -44,7 +53,17 @@ describe("App", () => {
 
   it("renders language hint with defaults", () => {
     render(<App />);
-    expect(screen.getByText(/English → 日本語/)).toBeInTheDocument();
+    const hint = screen.getByText((_, element) => {
+      return element?.className === "language-hint" &&
+        !!element?.textContent?.includes("English") &&
+        !!element?.textContent?.includes("日本語");
+    });
+    expect(hint).toBeInTheDocument();
+  });
+
+  it("renders model manager button", () => {
+    render(<App />);
+    expect(screen.getByLabelText("Model manager")).toBeInTheDocument();
   });
 
   it("renders swap button", () => {

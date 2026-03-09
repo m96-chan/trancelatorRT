@@ -1,8 +1,13 @@
 use crate::audio::state::PipelineState;
 use crate::audio::AudioPipeline;
+use crate::model::downloader::HttpDownloader;
+use crate::model::storage::FileStorage;
+use crate::model::{ModelManager, ModelStatusInfo, StorageInfo};
 use crate::pipeline::stt::Language;
 use std::sync::Mutex;
 use tauri::State;
+
+pub type AppModelManager = ModelManager<HttpDownloader, FileStorage>;
 
 #[derive(Debug, serde::Serialize)]
 pub struct LanguageInfo {
@@ -118,6 +123,53 @@ pub fn set_target_language(
         .ok_or_else(|| format!("Unknown language code: {}", code))?;
     lang_state.lock().map_err(|e| e.to_string())?.target = lang;
     Ok(())
+}
+
+// --- Model management commands ---
+
+#[tauri::command]
+pub fn get_model_list(
+    manager: State<'_, Mutex<AppModelManager>>,
+) -> Result<Vec<ModelStatusInfo>, String> {
+    Ok(manager.lock().map_err(|e| e.to_string())?.list_models())
+}
+
+#[tauri::command]
+pub fn get_storage_info(
+    manager: State<'_, Mutex<AppModelManager>>,
+) -> Result<StorageInfo, String> {
+    manager
+        .lock()
+        .map_err(|e| e.to_string())?
+        .storage_info()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn download_model(
+    id: String,
+    manager: State<'_, Mutex<AppModelManager>>,
+) -> Result<String, String> {
+    manager
+        .lock()
+        .map_err(|e| e.to_string())?
+        .download_model(&id, &|_downloaded, _total| {
+            // TODO: Emit progress events to frontend via Tauri events
+        })
+        .map(|path| path.to_string_lossy().to_string())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_model(
+    id: String,
+    manager: State<'_, Mutex<AppModelManager>>,
+) -> Result<(), String> {
+    manager
+        .lock()
+        .map_err(|e| e.to_string())?
+        .delete_model(&id)
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

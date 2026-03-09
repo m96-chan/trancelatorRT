@@ -23,6 +23,8 @@ thiserror = "2"
 parking_lot = "0.12"
 whisper-rs = "0.15"
 # ct2rs = "0.9"  # TODO: Enable when sentencepiece-sys build is fixed
+reqwest = { version = "0.12", features = ["blocking", "rustls-tls"], default-features = false }
+sha2 = "0.10"
 
 [features]
 default = ["custom-protocol"]
