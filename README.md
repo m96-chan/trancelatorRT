@@ -92,23 +92,82 @@ Captures voice input, converts it to text with Whisper, translates with NLLB, an
 ### Prerequisites / 前提条件
 
 - Rust (stable, latest)
-- Android SDK / NDK
 - Node.js (20+)
-- Tauri CLI (`cargo install tauri-cli`)
-- Android Studio (for emulator / on-device debugging)
+- Android Studio
+- JDK 17
 
-### Build / ビルド
+### 1. Install Rust / Rustのインストール
 
 ```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup target add aarch64-linux-android    # ARM64 (実機用)
+rustup target add x86_64-linux-android     # エミュレータ用 (必要に応じて)
+```
+
+### 2. Install Android Studio / Android Studioのインストール
+
+**Arch Linux:**
+```bash
+yay -S android-studio
+```
+
+Android Studio初回起動時に Standard セットアップを選択。
+Settings → Languages & Frameworks → Android SDK → SDK Tools で以下にチェック:
+- Android SDK Build-Tools
+- Android SDK Command-line Tools
+- **NDK (Side by side)**
+- Android SDK Platform-Tools
+
+### 3. Install JDK 17
+
+**Arch Linux:**
+```bash
+sudo pacman -S jdk17-openjdk
+sudo archlinux-java set java-17-openjdk
+```
+
+### 4. Environment Variables / 環境変数の設定
+
+`~/.bashrc` or `~/.zshrc` に追加:
+
+```bash
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
+export ANDROID_HOME=$HOME/Android/Sdk
+export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/<version>  # ls ~/Android/Sdk/ndk/ で確認
+export PATH=$PATH:$ANDROID_HOME/platform-tools
+```
+
+```bash
+source ~/.bashrc
+```
+
+### 5. Project Setup / プロジェクトセットアップ
+
+```bash
+git clone https://github.com/m96-chan/trancelatorRT.git
+cd trancelatorRT
+
 # Install dependencies / 依存関係のインストール
 npm install
 
-# Development build (Android) / 開発ビルド
-cargo tauri android dev
-
-# Release build / リリースビルド
-cargo tauri android build
+# Initialize Android target / Android初期化
+npx tauri android init
 ```
+
+### 6. Run / 実行
+
+Android Studio でエミュレータを起動するか、実機をUSBデバッグで接続してから:
+
+```bash
+# Development / 開発ビルド
+npx tauri android dev
+
+# Release / リリースビルド
+npx tauri android build
+```
+
+> **Note:** `npx tauri android dev` はエミュレータまたは実機が接続されていないと起動しません。
+> `adb devices` でデバイスが表示されることを確認してください。
 
 ## Project Structure (Planned) / プロジェクト構成（予定）
 
