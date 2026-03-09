@@ -22,6 +22,7 @@ ringbuf = "0.4"
 thiserror = "2"
 parking_lot = "0.12"
 whisper-rs = "0.15"
+# ct2rs = "0.9"  # TODO: Enable when sentencepiece-sys build is fixed
 
 [features]
 default = ["custom-protocol"]

@@ -57,6 +57,33 @@ impl Language {
             Language::Arabic,
         ]
     }
+
+    pub fn nllb_code(&self) -> &'static str {
+        match self {
+            Language::Japanese => "jpn_Jpan",
+            Language::Korean => "kor_Hang",
+            Language::English => "eng_Latn",
+            Language::French => "fra_Latn",
+            Language::German => "deu_Latn",
+            Language::Portuguese => "por_Latn",
+            Language::Russian => "rus_Cyrl",
+            Language::Arabic => "arb_Arab",
+        }
+    }
+
+    pub fn from_nllb_code(code: &str) -> Option<Self> {
+        match code {
+            "jpn_Jpan" => Some(Language::Japanese),
+            "kor_Hang" => Some(Language::Korean),
+            "eng_Latn" => Some(Language::English),
+            "fra_Latn" => Some(Language::French),
+            "deu_Latn" => Some(Language::German),
+            "por_Latn" => Some(Language::Portuguese),
+            "rus_Cyrl" => Some(Language::Russian),
+            "arb_Arab" => Some(Language::Arabic),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for Language {
@@ -256,6 +283,33 @@ mod tests {
     }
 
     // Language tests
+
+    #[test]
+    fn test_language_nllb_codes() {
+        assert_eq!(Language::Japanese.nllb_code(), "jpn_Jpan");
+        assert_eq!(Language::Korean.nllb_code(), "kor_Hang");
+        assert_eq!(Language::English.nllb_code(), "eng_Latn");
+        assert_eq!(Language::French.nllb_code(), "fra_Latn");
+        assert_eq!(Language::German.nllb_code(), "deu_Latn");
+        assert_eq!(Language::Portuguese.nllb_code(), "por_Latn");
+        assert_eq!(Language::Russian.nllb_code(), "rus_Cyrl");
+        assert_eq!(Language::Arabic.nllb_code(), "arb_Arab");
+    }
+
+    #[test]
+    fn test_language_from_nllb_code() {
+        assert_eq!(Language::from_nllb_code("jpn_Jpan"), Some(Language::Japanese));
+        assert_eq!(Language::from_nllb_code("eng_Latn"), Some(Language::English));
+        assert_eq!(Language::from_nllb_code("unknown"), None);
+    }
+
+    #[test]
+    fn test_language_nllb_roundtrip() {
+        for lang in Language::all() {
+            let code = lang.nllb_code();
+            assert_eq!(Language::from_nllb_code(code), Some(*lang));
+        }
+    }
 
     #[test]
     fn test_language_whisper_codes() {
