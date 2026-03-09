@@ -21,6 +21,7 @@ webrtc-vad = "0.4"
 ringbuf = "0.4"
 thiserror = "2"
 parking_lot = "0.12"
+whisper-rs = "0.15"
 
 [features]
 default = ["custom-protocol"]
