@@ -16,6 +16,11 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+cpal = "0.15"
+webrtc-vad = "0.4"
+ringbuf = "0.4"
+thiserror = "2"
+parking_lot = "0.12"
 
 [features]
 default = ["custom-protocol"]
