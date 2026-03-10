@@ -61,6 +61,8 @@ jobs:
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
 
       - name: Initialize Android project
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
         run: npx tauri android init
 
       - name: Build Android APK
@@ -69,7 +71,7 @@ jobs:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
-          npx tauri android build --apk
+          npx tauri android build --apk --target aarch64
 
       - name: Sign APK
         env:
