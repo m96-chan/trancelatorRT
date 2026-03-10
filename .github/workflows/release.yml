@@ -60,6 +60,9 @@ jobs:
       - name: Decode keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
 
+      - name: Initialize Android project
+        run: npx tauri android init
+
       - name: Build Android APK
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
