@@ -75,10 +75,44 @@ jobs:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
         run: npx tauri android init
 
-      - name: Add Android permissions
+      - name: Add Android permissions and runtime request
         run: |
           MANIFEST="src-tauri/gen/android/app/src/main/AndroidManifest.xml"
           sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />|' "$MANIFEST"
+
+          MAIN_ACTIVITY="src-tauri/gen/android/app/src/main/java/com/m96chan/trancelatorrt/MainActivity.kt"
+          cat > "$MAIN_ACTIVITY" << 'KOTLIN_EOF'
+          package com.m96chan.trancelatorrt
+
+          import android.Manifest
+          import android.content.pm.PackageManager
+          import android.os.Build
+          import android.os.Bundle
+          import androidx.activity.enableEdgeToEdge
+          import androidx.core.app.ActivityCompat
+          import androidx.core.content.ContextCompat
+
+          class MainActivity : TauriActivity() {
+            override fun onCreate(savedInstanceState: Bundle?) {
+              enableEdgeToEdge()
+              super.onCreate(savedInstanceState)
+              requestAudioPermission()
+            }
+
+            private fun requestAudioPermission() {
+              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                    != PackageManager.PERMISSION_GRANTED) {
+                  ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.RECORD_AUDIO),
+                    1001
+                  )
+                }
+              }
+            }
+          }
+          KOTLIN_EOF
 
       - name: Build Android APK
         env:
