@@ -5,7 +5,14 @@ use crate::model::storage::FileStorage;
 use crate::model::{ModelManager, ModelStatusInfo, StorageInfo};
 use crate::pipeline::stt::Language;
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{Emitter, State};
+
+#[derive(Clone, serde::Serialize)]
+pub struct DownloadProgress {
+    pub id: String,
+    pub downloaded: u64,
+    pub total: u64,
+}
 
 pub type AppModelManager = ModelManager<HttpDownloader, FileStorage>;
 
@@ -149,12 +156,21 @@ pub fn get_storage_info(
 pub fn download_model(
     id: String,
     manager: State<'_, Mutex<AppModelManager>>,
+    app: tauri::AppHandle,
 ) -> Result<String, String> {
+    let model_id = id.clone();
     manager
         .lock()
         .map_err(|e| e.to_string())?
-        .download_model(&id, &|_downloaded, _total| {
-            // TODO: Emit progress events to frontend via Tauri events
+        .download_model(&id, &|downloaded, total| {
+            let _ = app.emit(
+                "download-progress",
+                DownloadProgress {
+                    id: model_id.clone(),
+                    downloaded,
+                    total,
+                },
+            );
         })
         .map(|path| path.to_string_lossy().to_string())
         .map_err(|e| e.to_string())

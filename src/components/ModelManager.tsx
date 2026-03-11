@@ -9,7 +9,7 @@ interface ModelManagerProps {
 }
 
 export function ModelManagerPanel({ state, actions, onClose }: ModelManagerProps) {
-  const { models, storageInfo, loading, error } = state;
+  const { models, storageInfo, loading, downloading, error } = state;
 
   const whisperModels = models.filter((m) => m.info.model_type === "Whisper");
   const nllbModels = models.filter((m) => m.info.model_type === "Nllb");
@@ -36,9 +36,9 @@ export function ModelManagerPanel({ state, actions, onClose }: ModelManagerProps
 
       {!loading && (
         <>
-          <ModelSection title="Speech Recognition (Whisper)" models={whisperModels} actions={actions} />
-          <ModelSection title="Translation (NLLB)" models={nllbModels} actions={actions} />
-          <ModelSection title="Text-to-Speech (Piper)" models={piperModels} actions={actions} />
+          <ModelSection title="Speech Recognition (Whisper)" models={whisperModels} actions={actions} downloading={downloading} />
+          <ModelSection title="Translation (NLLB)" models={nllbModels} actions={actions} downloading={downloading} />
+          <ModelSection title="Text-to-Speech (Piper)" models={piperModels} actions={actions} downloading={downloading} />
         </>
       )}
     </div>
@@ -49,10 +49,12 @@ function ModelSection({
   title,
   models,
   actions,
+  downloading,
 }: {
   title: string;
   models: ModelManagerState["models"];
   actions: ModelManagerActions;
+  downloading: Record<string, number>;
 }) {
   if (models.length === 0) return null;
 
@@ -63,6 +65,7 @@ function ModelSection({
         <ModelCard
           key={model.info.id}
           model={model}
+          downloadPercent={downloading[model.info.id]}
           onDownload={actions.downloadModel}
           onDelete={actions.deleteModel}
         />

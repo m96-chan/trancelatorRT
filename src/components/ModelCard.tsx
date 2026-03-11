@@ -1,20 +1,28 @@
 import type { ModelStatusInfo } from "../types";
-import { formatBytes, getModelStatusLabel, isDownloading } from "../types";
+import { formatBytes } from "../types";
 
 interface ModelCardProps {
   model: ModelStatusInfo;
+  downloadPercent: number | undefined;
   onDownload: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
-export function ModelCard({ model, onDownload, onDelete }: ModelCardProps) {
+export function ModelCard({
+  model,
+  downloadPercent,
+  onDownload,
+  onDelete,
+}: ModelCardProps) {
   const { info, status } = model;
-  const downloading = isDownloading(status);
+  const downloading = downloadPercent !== undefined;
   const downloaded = status === "Downloaded";
-  const progressPercent =
-    typeof status === "object" && "Downloading" in status
-      ? status.Downloading.progress_percent
-      : 0;
+
+  const statusLabel = downloading
+    ? `Downloading ${downloadPercent}%`
+    : downloaded
+      ? "Downloaded"
+      : "Not Downloaded";
 
   return (
     <div className="model-card" data-testid={`model-card-${info.id}`}>
@@ -31,14 +39,18 @@ export function ModelCard({ model, onDownload, onDelete }: ModelCardProps) {
           className={`model-status ${downloaded ? "status-ok" : ""}`}
           data-testid={`model-status-${info.id}`}
         >
-          {getModelStatusLabel(status)}
+          {statusLabel}
         </span>
       </div>
       {downloading && (
-        <div className="model-progress-bar" role="progressbar" aria-valuenow={progressPercent}>
+        <div
+          className="model-progress-bar"
+          role="progressbar"
+          aria-valuenow={downloadPercent}
+        >
           <div
             className="model-progress-fill"
-            style={{ width: `${progressPercent}%` }}
+            style={{ width: `${downloadPercent}%` }}
           />
         </div>
       )}

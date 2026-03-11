@@ -3,6 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useModelManager } from "./useModelManager";
 import type { ModelStatusInfo, StorageInfo } from "../types";
 
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(() => Promise.resolve(() => {})),
+}));
+
 const mockModels: ModelStatusInfo[] = [
   {
     info: {
@@ -84,5 +88,10 @@ describe("useModelManager", () => {
     await waitFor(() => {
       expect(result.current[0].error).toBe("Network error");
     });
+  });
+
+  it("initializes downloading state as empty", async () => {
+    const { result } = renderHook(() => useModelManager(mockInvoke));
+    expect(result.current[0].downloading).toEqual({});
   });
 });

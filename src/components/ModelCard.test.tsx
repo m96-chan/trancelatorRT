@@ -24,7 +24,7 @@ function makeModel(overrides: Partial<ModelStatusInfo> = {}): ModelStatusInfo {
 describe("ModelCard", () => {
   it("shows model name and type", () => {
     render(
-      <ModelCard model={makeModel()} onDownload={() => {}} onDelete={() => {}} />,
+      <ModelCard model={makeModel()} downloadPercent={undefined} onDownload={() => {}} onDelete={() => {}} />,
     );
     expect(screen.getByText("Whisper Tiny")).toBeInTheDocument();
     expect(screen.getByText("Whisper")).toBeInTheDocument();
@@ -32,7 +32,7 @@ describe("ModelCard", () => {
 
   it("shows download button when not downloaded", () => {
     render(
-      <ModelCard model={makeModel()} onDownload={() => {}} onDelete={() => {}} />,
+      <ModelCard model={makeModel()} downloadPercent={undefined} onDownload={() => {}} onDelete={() => {}} />,
     );
     expect(screen.getByLabelText("Download Whisper Tiny")).toBeInTheDocument();
   });
@@ -41,6 +41,7 @@ describe("ModelCard", () => {
     render(
       <ModelCard
         model={makeModel({ status: "Downloaded" })}
+        downloadPercent={undefined}
         onDownload={() => {}}
         onDelete={() => {}}
       />,
@@ -51,18 +52,22 @@ describe("ModelCard", () => {
   it("shows progress bar when downloading", () => {
     render(
       <ModelCard
-        model={makeModel({ status: { Downloading: { progress_percent: 42 } } })}
+        model={makeModel()}
+        downloadPercent={42}
         onDownload={() => {}}
         onDelete={() => {}}
       />,
     );
     expect(screen.getByRole("progressbar")).toBeInTheDocument();
+    expect(screen.getByTestId("model-status-whisper-tiny")).toHaveTextContent(
+      "Downloading 42%",
+    );
   });
 
   it("calls onDownload when download clicked", () => {
     const onDownload = vi.fn();
     render(
-      <ModelCard model={makeModel()} onDownload={onDownload} onDelete={() => {}} />,
+      <ModelCard model={makeModel()} downloadPercent={undefined} onDownload={onDownload} onDelete={() => {}} />,
     );
     fireEvent.click(screen.getByLabelText("Download Whisper Tiny"));
     expect(onDownload).toHaveBeenCalledWith("whisper-tiny");
@@ -73,6 +78,7 @@ describe("ModelCard", () => {
     render(
       <ModelCard
         model={makeModel({ status: "Downloaded" })}
+        downloadPercent={undefined}
         onDownload={() => {}}
         onDelete={onDelete}
       />,
@@ -83,14 +89,14 @@ describe("ModelCard", () => {
 
   it("shows size formatted", () => {
     render(
-      <ModelCard model={makeModel()} onDownload={() => {}} onDelete={() => {}} />,
+      <ModelCard model={makeModel()} downloadPercent={undefined} onDownload={() => {}} onDelete={() => {}} />,
     );
     expect(screen.getByText("71.5 MB")).toBeInTheDocument();
   });
 
   it("shows status text", () => {
     render(
-      <ModelCard model={makeModel()} onDownload={() => {}} onDelete={() => {}} />,
+      <ModelCard model={makeModel()} downloadPercent={undefined} onDownload={() => {}} onDelete={() => {}} />,
     );
     expect(screen.getByTestId("model-status-whisper-tiny")).toHaveTextContent(
       "Not Downloaded",
