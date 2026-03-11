@@ -1,5 +1,5 @@
 use super::{ModelError, ModelResult};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::Path;
 
 pub trait Downloader: Send {
@@ -45,16 +45,19 @@ impl Downloader for HttpDownloader {
         let mut file = std::fs::File::create(dest_path)
             .map_err(|e| ModelError::Io(e.to_string()))?;
 
-        let bytes = response
-            .bytes()
-            .map_err(|e| ModelError::DownloadFailed(e.to_string()))?;
-
-        let chunk_size = 8192;
+        // Stream the response in chunks to avoid loading entire file into memory
+        let mut reader = response;
+        let mut buf = [0u8; 65536];
         let mut downloaded: u64 = 0;
-        for chunk in bytes.chunks(chunk_size) {
-            file.write_all(chunk)
+        loop {
+            let n = reader.read(&mut buf)
+                .map_err(|e| ModelError::DownloadFailed(e.to_string()))?;
+            if n == 0 {
+                break;
+            }
+            file.write_all(&buf[..n])
                 .map_err(|e| ModelError::Io(e.to_string()))?;
-            downloaded += chunk.len() as u64;
+            downloaded += n as u64;
             progress_cb(downloaded, total);
         }
 
