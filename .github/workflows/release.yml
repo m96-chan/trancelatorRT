@@ -57,8 +57,18 @@ jobs:
             src-tauri/target/
           key: ${{ runner.os }}-cargo-android-${{ hashFiles('src-tauri/Cargo.lock') }}
 
-      - name: Decode keystore
-        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > keystore.jks
+      - name: Generate signing keystore
+        run: |
+          keytool -genkeypair \
+            -v \
+            -keystore release.jks \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -alias trancelatorrt \
+            -storepass trancelatorrt \
+            -keypass trancelatorrt \
+            -dname "CN=trancelatorRT, O=m96-chan"
 
       - name: Initialize Android project
         env:
@@ -69,15 +79,10 @@ jobs:
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           npx tauri android build --apk --target aarch64
 
       - name: Sign APK
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           APK_PATH=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -1)
           if [ -z "$APK_PATH" ]; then
@@ -85,21 +90,22 @@ jobs:
             exit 1
           fi
 
-          # Align the APK
-          ${ANDROID_HOME}/build-tools/$(ls ${ANDROID_HOME}/build-tools/ | tail -1)/zipalign -v 4 \
-            "$APK_PATH" trancelatorRT-aligned.apk
+          BUILD_TOOLS_DIR="${ANDROID_HOME}/build-tools/$(ls ${ANDROID_HOME}/build-tools/ | tail -1)"
 
-          # Sign with apksigner
-          ${ANDROID_HOME}/build-tools/$(ls ${ANDROID_HOME}/build-tools/ | tail -1)/apksigner sign \
-            --ks keystore.jks \
-            --ks-pass "pass:${KEYSTORE_PASSWORD}" \
-            --ks-key-alias "${KEY_ALIAS}" \
-            --key-pass "pass:${KEY_PASSWORD}" \
+          # Align
+          "${BUILD_TOOLS_DIR}/zipalign" -v 4 "$APK_PATH" trancelatorRT-aligned.apk
+
+          # Sign
+          "${BUILD_TOOLS_DIR}/apksigner" sign \
+            --ks release.jks \
+            --ks-pass pass:trancelatorrt \
+            --ks-key-alias trancelatorrt \
+            --key-pass pass:trancelatorrt \
             --out trancelatorRT-${{ github.ref_name }}-release.apk \
             trancelatorRT-aligned.apk
 
-          # Verify signature
-          ${ANDROID_HOME}/build-tools/$(ls ${ANDROID_HOME}/build-tools/ | tail -1)/apksigner verify \
+          # Verify
+          "${BUILD_TOOLS_DIR}/apksigner" verify \
             trancelatorRT-${{ github.ref_name }}-release.apk
 
       - name: Upload APK artifact
@@ -114,6 +120,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download APK artifact
         uses: actions/download-artifact@v4
@@ -121,17 +129,16 @@ jobs:
           name: android-apk
 
       - name: Generate release notes
-        id: notes
         run: |
-          VERSION=${{ github.ref_name }}
+          VERSION="${{ github.ref_name }}"
           PREV_TAG=$(git tag --sort=-creatordate | grep -v "$VERSION" | head -1 || echo "")
           if [ -n "$PREV_TAG" ]; then
-            COMMITS=$(git log --oneline ${PREV_TAG}..HEAD -- | head -20)
+            COMMITS=$(git log --oneline "${PREV_TAG}..HEAD" | head -20)
           else
             COMMITS=$(git log --oneline -20)
           fi
 
-          cat > release_notes.md << 'NOTES_EOF'
+          cat > release_notes.md << EOF
           ## trancelatorRT ${VERSION}
 
           ### What's New
@@ -151,7 +158,7 @@ jobs:
           ### Requirements
           - Android 8.0+ (API 26)
           - ~2GB free storage for AI models
-          NOTES_EOF
+          EOF
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
