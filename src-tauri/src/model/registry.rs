@@ -56,16 +56,7 @@ impl Default for ModelRegistry {
                     sha256: "placeholder-piper-en-checksum".into(),
                     filename: "en_US-lessac-medium.onnx".into(),
                 },
-                ModelInfo {
-                    model_type: ModelType::Piper,
-                    id: "piper-ja-jp-kokoro".into(),
-                    display_name: "Piper Japanese".into(),
-                    version: "1.0.0".into(),
-                    url: "https://huggingface.co/rhasspy/piper-voices/resolve/main/ja/ja_JP/kokoro/medium/ja_JP-kokoro-medium.onnx".into(),
-                    size_bytes: 63_000_000,
-                    sha256: "placeholder-piper-ja-checksum".into(),
-                    filename: "ja_JP-kokoro-medium.onnx".into(),
-                },
+                // Note: Japanese Piper voice not available in rhasspy/piper-voices
             ],
         }
     }
@@ -103,7 +94,7 @@ mod tests {
     fn test_registry_by_type_filters_correctly() {
         let registry = ModelRegistry::default();
         let piper_models = registry.by_type(ModelType::Piper);
-        assert!(piper_models.len() >= 2);
+        assert!(piper_models.len() >= 1);
         assert!(piper_models.iter().all(|m| m.model_type == ModelType::Piper));
     }
 

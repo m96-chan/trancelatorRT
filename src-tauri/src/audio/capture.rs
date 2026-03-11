@@ -43,10 +43,33 @@ impl AudioCapture {
             .default_input_device()
             .ok_or(AudioError::NoInputDevice)?;
 
-        let stream_config = cpal::StreamConfig {
-            channels: self.config.channels,
-            sample_rate: cpal::SampleRate(self.config.sample_rate),
-            buffer_size: cpal::BufferSize::Default,
+        // Try requested config first, fall back to device default
+        let stream_config = {
+            let requested = cpal::StreamConfig {
+                channels: self.config.channels,
+                sample_rate: cpal::SampleRate(self.config.sample_rate),
+                buffer_size: cpal::BufferSize::Default,
+            };
+            // Check if the device supports our requested config
+            match device.supported_input_configs() {
+                Ok(configs) => {
+                    let supported = configs.into_iter().any(|c| {
+                        c.channels() >= self.config.channels
+                            && c.min_sample_rate().0 <= self.config.sample_rate
+                            && c.max_sample_rate().0 >= self.config.sample_rate
+                    });
+                    if supported {
+                        requested
+                    } else {
+                        // Use device default config
+                        device
+                            .default_input_config()
+                            .map(|c| c.into())
+                            .unwrap_or(requested)
+                    }
+                }
+                Err(_) => requested,
+            }
         };
 
         let err_callback = |err: cpal::StreamError| {
