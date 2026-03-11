@@ -8,6 +8,12 @@ use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, State};
 
 #[derive(Clone, serde::Serialize)]
+pub struct TranscriptionResult {
+    pub recognized: String,
+    pub translated: String,
+}
+
+#[derive(Clone, serde::Serialize)]
 pub struct DownloadProgress {
     pub id: String,
     pub downloaded: u64,

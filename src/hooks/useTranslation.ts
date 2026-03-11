@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { listen } from "@tauri-apps/api/event";
 import type { PipelineState } from "../types";
 
 export interface TranslationState {
@@ -23,6 +24,11 @@ interface TauriInvoke {
   (cmd: string, args?: Record<string, unknown>): Promise<unknown>;
 }
 
+interface TranscriptionResult {
+  recognized: string;
+  translated: string;
+}
+
 export function useTranslation(
   invoke: TauriInvoke,
 ): [TranslationState, TranslationActions] {
@@ -32,6 +38,24 @@ export function useTranslation(
   const [transcriptionText, setTranscriptionText] = useState("");
   const [translationText, setTranslationText] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unlisten = listen<TranscriptionResult>(
+      "transcription-result",
+      (event) => {
+        const { recognized, translated } = event.payload;
+        setTranscriptionText((prev) =>
+          prev ? prev + "\n" + recognized : recognized,
+        );
+        setTranslationText((prev) =>
+          prev ? prev + "\n" + translated : translated,
+        );
+      },
+    );
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
 
   const setSourceLanguage = useCallback(
     (code: string) => {

@@ -5,16 +5,16 @@ mod pipeline;
 
 use audio::capture::CaptureConfig;
 use audio::AudioPipeline;
-use commands::LanguageState;
+use commands::{LanguageState, TranscriptionResult};
 use model::downloader::HttpDownloader;
 use model::registry::ModelRegistry;
 use model::storage::FileStorage;
 use model::ModelManager;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let (segment_tx, _segment_rx) = std::sync::mpsc::channel();
+    let (segment_tx, segment_rx) = std::sync::mpsc::channel();
     let pipeline =
         AudioPipeline::new(CaptureConfig::default(), segment_tx).expect("Failed to create audio pipeline");
 
@@ -34,6 +34,39 @@ pub fn run() {
             let model_manager = ModelManager::new(registry, downloader, storage);
 
             app.manage(std::sync::Arc::new(std::sync::Mutex::new(model_manager)));
+
+            // Spawn segment processing thread
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                let mut segment_count = 0u32;
+                while let Ok(segment) = segment_rx.recv() {
+                    segment_count += 1;
+                    let duration_ms = segment.len() as f64 / 16.0; // ~16 samples/ms at 16kHz
+
+                    // Stub STT: report that speech was detected with duration
+                    let recognized = format!(
+                        "[Speech segment #{} detected: {:.0}ms, {} samples]",
+                        segment_count,
+                        duration_ms,
+                        segment.len()
+                    );
+
+                    // Stub translation
+                    let translated = format!(
+                        "[Translation stub: segment #{} pending model integration]",
+                        segment_count
+                    );
+
+                    let _ = app_handle.emit(
+                        "transcription-result",
+                        TranscriptionResult {
+                            recognized,
+                            translated,
+                        },
+                    );
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

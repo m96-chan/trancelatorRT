@@ -2,6 +2,10 @@ import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useTranslation } from "./useTranslation";
 
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(() => Promise.resolve(() => {})),
+}));
+
 describe("useTranslation", () => {
   let mockInvoke: ReturnType<typeof vi.fn>;
 
