@@ -75,6 +75,11 @@ jobs:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.12077973
         run: npx tauri android init
 
+      - name: Add Android permissions
+        run: |
+          MANIFEST="src-tauri/gen/android/app/src/main/AndroidManifest.xml"
+          sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />|' "$MANIFEST"
+
       - name: Build Android APK
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}

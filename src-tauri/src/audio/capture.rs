@@ -1,5 +1,6 @@
 use super::error::{AudioError, AudioResult};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::SampleFormat;
 
 pub struct CaptureConfig {
     pub sample_rate: u32,
@@ -43,49 +44,50 @@ impl AudioCapture {
             .default_input_device()
             .ok_or(AudioError::NoInputDevice)?;
 
-        // Try requested config first, fall back to device default
-        let stream_config = {
-            let requested = cpal::StreamConfig {
-                channels: self.config.channels,
-                sample_rate: cpal::SampleRate(self.config.sample_rate),
-                buffer_size: cpal::BufferSize::Default,
-            };
-            // Check if the device supports our requested config
-            match device.supported_input_configs() {
-                Ok(configs) => {
-                    let supported = configs.into_iter().any(|c| {
-                        c.channels() >= self.config.channels
-                            && c.min_sample_rate().0 <= self.config.sample_rate
-                            && c.max_sample_rate().0 >= self.config.sample_rate
-                    });
-                    if supported {
-                        requested
-                    } else {
-                        // Use device default config
-                        device
-                            .default_input_config()
-                            .map(|c| c.into())
-                            .unwrap_or(requested)
-                    }
-                }
-                Err(_) => requested,
-            }
-        };
+        let default_config = device
+            .default_input_config()
+            .map_err(|e| AudioError::StreamError(e.to_string()))?;
+
+        let sample_format = default_config.sample_format();
+        let stream_config: cpal::StreamConfig = default_config.into();
 
         let err_callback = |err: cpal::StreamError| {
             eprintln!("Audio stream error: {}", err);
         };
 
-        let stream = device
-            .build_input_stream(
-                &stream_config,
-                move |data: &[i16], _: &cpal::InputCallbackInfo| {
-                    callback(data);
-                },
-                err_callback,
-                None,
-            )
-            .map_err(|e| AudioError::StreamError(e.to_string()))?;
+        // Build stream matching the device's native sample format
+        let stream = match sample_format {
+            SampleFormat::I16 => device
+                .build_input_stream(
+                    &stream_config,
+                    move |data: &[i16], _: &cpal::InputCallbackInfo| {
+                        callback(data);
+                    },
+                    err_callback,
+                    None,
+                )
+                .map_err(|e| AudioError::StreamError(e.to_string()))?,
+            SampleFormat::F32 => device
+                .build_input_stream(
+                    &stream_config,
+                    move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                        let i16_data: Vec<i16> = data
+                            .iter()
+                            .map(|&s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
+                            .collect();
+                        callback(&i16_data);
+                    },
+                    err_callback,
+                    None,
+                )
+                .map_err(|e| AudioError::StreamError(e.to_string()))?,
+            _ => {
+                return Err(AudioError::StreamError(format!(
+                    "Unsupported sample format: {:?}",
+                    sample_format
+                )));
+            }
+        };
 
         stream
             .play()
