@@ -1,11 +1,11 @@
 use crate::audio::state::PipelineState;
 use crate::audio::AudioPipeline;
-use crate::model::downloader::HttpDownloader;
+use crate::model::downloader::{Downloader, HttpDownloader};
 use crate::model::storage::FileStorage;
 use crate::model::{ModelManager, ModelStatusInfo, StorageInfo};
 use crate::pipeline::stt::Language;
-use std::sync::Mutex;
-use tauri::{Emitter, State};
+use std::sync::{Arc, Mutex};
+use tauri::{Emitter, Manager, State};
 
 #[derive(Clone, serde::Serialize)]
 pub struct DownloadProgress {
@@ -14,7 +14,14 @@ pub struct DownloadProgress {
     pub total: u64,
 }
 
-pub type AppModelManager = ModelManager<HttpDownloader, FileStorage>;
+#[derive(Clone, serde::Serialize)]
+pub struct DownloadComplete {
+    pub id: String,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+pub type AppModelManager = Arc<Mutex<ModelManager<HttpDownloader, FileStorage>>>;
 
 #[derive(Debug, serde::Serialize)]
 pub struct LanguageInfo {
@@ -136,14 +143,14 @@ pub fn set_target_language(
 
 #[tauri::command]
 pub fn get_model_list(
-    manager: State<'_, Mutex<AppModelManager>>,
+    manager: State<'_, AppModelManager>,
 ) -> Result<Vec<ModelStatusInfo>, String> {
     Ok(manager.lock().map_err(|e| e.to_string())?.list_models())
 }
 
 #[tauri::command]
 pub fn get_storage_info(
-    manager: State<'_, Mutex<AppModelManager>>,
+    manager: State<'_, AppModelManager>,
 ) -> Result<StorageInfo, String> {
     manager
         .lock()
@@ -155,15 +162,26 @@ pub fn get_storage_info(
 #[tauri::command]
 pub fn download_model(
     id: String,
-    manager: State<'_, Mutex<AppModelManager>>,
+    manager: State<'_, AppModelManager>,
     app: tauri::AppHandle,
-) -> Result<String, String> {
-    let model_id = id.clone();
-    manager
+) -> Result<(), String> {
+    // Briefly lock to prepare download (validate, set status, get URL)
+    let (url, dest) = manager
         .lock()
         .map_err(|e| e.to_string())?
-        .download_model(&id, &|downloaded, total| {
-            let _ = app.emit(
+        .prepare_download(&id)
+        .map_err(|e| e.to_string())?;
+
+    // Clone Arc for the background thread
+    let manager_arc = Arc::clone(&manager);
+    let app_handle = app.clone();
+    let model_id = id.clone();
+
+    // Download in background thread — mutex is NOT held during download
+    std::thread::spawn(move || {
+        let downloader = HttpDownloader::new();
+        let result = downloader.download(&url, &dest, &|downloaded, total| {
+            let _ = app_handle.emit(
                 "download-progress",
                 DownloadProgress {
                     id: model_id.clone(),
@@ -171,15 +189,46 @@ pub fn download_model(
                     total,
                 },
             );
-        })
-        .map(|path| path.to_string_lossy().to_string())
-        .map_err(|e| e.to_string())
+        });
+
+        // Briefly lock to update status
+        let success;
+        let error;
+        if let Ok(mut mgr) = manager_arc.lock() {
+            match &result {
+                Ok(()) => {
+                    mgr.finish_download(&id);
+                    success = true;
+                    error = None;
+                }
+                Err(e) => {
+                    mgr.fail_download(&id);
+                    success = false;
+                    error = Some(e.to_string());
+                }
+            }
+        } else {
+            success = result.is_ok();
+            error = result.err().map(|e| e.to_string());
+        }
+
+        let _ = app_handle.emit(
+            "download-complete",
+            DownloadComplete {
+                id: id.clone(),
+                success,
+                error,
+            },
+        );
+    });
+
+    Ok(())
 }
 
 #[tauri::command]
 pub fn delete_model(
     id: String,
-    manager: State<'_, Mutex<AppModelManager>>,
+    manager: State<'_, AppModelManager>,
 ) -> Result<(), String> {
     manager
         .lock()

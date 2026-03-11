@@ -145,23 +145,18 @@ impl<D: Downloader, S: Storage> ModelManager<D, S> {
         })
     }
 
-    pub fn download_model(
-        &mut self,
-        id: &str,
-        progress_cb: &dyn Fn(u64, u64),
-    ) -> ModelResult<PathBuf> {
+    /// Prepare a download: validate, check storage, set status. Returns (url, dest_path).
+    pub fn prepare_download(&mut self, id: &str) -> ModelResult<(String, PathBuf)> {
         let info = self
             .registry
             .get(id)
             .ok_or_else(|| ModelError::NotFound(id.to_string()))?
             .clone();
 
-        // Check if already downloading
         if let Some(ModelStatus::Downloading { .. }) = self.statuses.get(id) {
             return Err(ModelError::AlreadyDownloading(id.to_string()));
         }
 
-        // Check storage capacity
         let available = self.storage.available_space()?;
         if available < info.size_bytes {
             return Err(ModelError::InsufficientStorage {
@@ -171,25 +166,45 @@ impl<D: Downloader, S: Storage> ModelManager<D, S> {
         }
 
         self.storage.ensure_dir()?;
-
-        // Set downloading status
         self.statuses
             .insert(id.to_string(), ModelStatus::Downloading { progress_percent: 0 });
 
         let dest = self.storage.model_path(&info.filename);
+        Ok((info.url.clone(), dest))
+    }
 
-        // Download
-        match self.downloader.download(&info.url, &dest, progress_cb) {
+    /// Mark a download as completed successfully.
+    pub fn finish_download(&mut self, id: &str) {
+        self.statuses.insert(id.to_string(), ModelStatus::Downloaded);
+    }
+
+    /// Mark a download as failed and clean up partial file.
+    pub fn fail_download(&mut self, id: &str) {
+        if let Some(info) = self.registry.get(id) {
+            let _ = self.storage.delete(&info.filename);
+        }
+        self.statuses.insert(id.to_string(), ModelStatus::NotDownloaded);
+    }
+
+    /// Get the downloader reference for performing downloads outside the lock.
+    pub fn downloader(&self) -> &D {
+        &self.downloader
+    }
+
+    pub fn download_model(
+        &mut self,
+        id: &str,
+        progress_cb: &dyn Fn(u64, u64),
+    ) -> ModelResult<PathBuf> {
+        let (url, dest) = self.prepare_download(id)?;
+
+        match self.downloader.download(&url, &dest, progress_cb) {
             Ok(()) => {
-                self.statuses
-                    .insert(id.to_string(), ModelStatus::Downloaded);
+                self.finish_download(id);
                 Ok(dest)
             }
             Err(e) => {
-                self.statuses
-                    .insert(id.to_string(), ModelStatus::NotDownloaded);
-                // Clean up partial file
-                let _ = self.storage.delete(&info.filename);
+                self.fail_download(id);
                 Err(e)
             }
         }

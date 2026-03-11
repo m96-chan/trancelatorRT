@@ -33,7 +33,7 @@ pub fn run() {
             let storage = FileStorage::new(models_dir);
             let model_manager = ModelManager::new(registry, downloader, storage);
 
-            app.manage(std::sync::Mutex::new(model_manager));
+            app.manage(std::sync::Arc::new(std::sync::Mutex::new(model_manager)));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
