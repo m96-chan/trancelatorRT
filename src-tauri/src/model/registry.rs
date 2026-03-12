@@ -29,12 +29,32 @@ impl Default for ModelRegistry {
                 ModelInfo {
                     model_type: ModelType::Whisper,
                     id: "whisper-tiny".into(),
-                    display_name: "Whisper Tiny".into(),
+                    display_name: "Whisper Tiny (75MB)".into(),
                     version: "1.0.0".into(),
                     url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin".into(),
                     size_bytes: 75_000_000,
                     sha256: "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21".into(),
                     filename: "ggml-tiny.bin".into(),
+                },
+                ModelInfo {
+                    model_type: ModelType::Whisper,
+                    id: "whisper-base".into(),
+                    display_name: "Whisper Base (142MB, recommended)".into(),
+                    version: "1.0.0".into(),
+                    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin".into(),
+                    size_bytes: 142_000_000,
+                    sha256: "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b7f0f4f2f7e626f477".into(),
+                    filename: "ggml-base.bin".into(),
+                },
+                ModelInfo {
+                    model_type: ModelType::Whisper,
+                    id: "whisper-small".into(),
+                    display_name: "Whisper Small (466MB, best quality)".into(),
+                    version: "1.0.0".into(),
+                    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin".into(),
+                    size_bytes: 466_000_000,
+                    sha256: "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1571c230d4".into(),
+                    filename: "ggml-small.bin".into(),
                 },
                 ModelInfo {
                     model_type: ModelType::Nllb,
@@ -93,6 +113,9 @@ mod tests {
     #[test]
     fn test_registry_by_type_filters_correctly() {
         let registry = ModelRegistry::default();
+        let whisper_models = registry.by_type(ModelType::Whisper);
+        assert_eq!(whisper_models.len(), 3);
+        assert!(whisper_models.iter().all(|m| m.model_type == ModelType::Whisper));
         let piper_models = registry.by_type(ModelType::Piper);
         assert!(piper_models.len() >= 1);
         assert!(piper_models.iter().all(|m| m.model_type == ModelType::Piper));

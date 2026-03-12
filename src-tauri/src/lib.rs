@@ -16,6 +16,40 @@ use tauri::{Emitter, Manager};
 
 type AppModelManager = std::sync::Arc<std::sync::Mutex<ModelManager<HttpDownloader, FileStorage>>>;
 
+/// Known Whisper hallucination patterns (especially with tiny model)
+fn is_hallucination(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    let hallucinations = [
+        "ご視聴ありがとうございました",
+        "ありがとうございました",
+        "チャンネル登録",
+        "お願いします",
+        "thank you for watching",
+        "thanks for watching",
+        "please subscribe",
+        "like and subscribe",
+        "see you next time",
+        "subtitles by",
+        "translated by",
+        "www.",
+        "http",
+    ];
+    for h in &hallucinations {
+        if lower.contains(&h.to_lowercase()) {
+            return true;
+        }
+    }
+    // Detect repetitive patterns (e.g., same word repeated many times)
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if words.len() >= 4 {
+        let first = words[0];
+        if words.iter().all(|w| *w == first) {
+            return true;
+        }
+    }
+    false
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let (segment_tx, segment_rx) = std::sync::mpsc::channel();
@@ -41,12 +75,17 @@ pub fn run() {
             let storage = FileStorage::new(models_dir.clone());
             let model_manager = ModelManager::new(registry, downloader, storage);
 
-            // Check if Whisper model is already downloaded
-            let whisper_model_path = if model_manager.is_downloaded("whisper-tiny").unwrap_or(false) {
-                model_manager.model_path("whisper-tiny").ok().flatten()
-            } else {
-                None
-            };
+            // Pick the best available Whisper model (prefer larger)
+            let whisper_models = ["whisper-small", "whisper-base", "whisper-tiny"];
+            let whisper_model_path = whisper_models
+                .iter()
+                .find_map(|id| {
+                    if model_manager.is_downloaded(id).unwrap_or(false) {
+                        model_manager.model_path(id).ok().flatten()
+                    } else {
+                        None
+                    }
+                });
 
             let model_manager_arc: AppModelManager =
                 std::sync::Arc::new(std::sync::Mutex::new(model_manager));
@@ -103,14 +142,20 @@ pub fn run() {
                     if !stt_ready {
                         emit_log("stt", "Whisper not loaded, checking for model...");
                         if let Ok(mgr) = model_manager_for_thread.lock() {
-                            if let Ok(Some(path)) = mgr.model_path("whisper-tiny") {
-                                emit_log("stt", &format!("Found model at {}, loading...", path.display()));
-                                if let Ok(()) = recognizer.load_model(path.to_str().unwrap_or("")) {
-                                    stt_ready = true;
-                                    emit_log("stt", "Whisper model loaded (lazy)");
+                            // Try best model first
+                            let models = ["whisper-small", "whisper-base", "whisper-tiny"];
+                            for id in &models {
+                                if let Ok(Some(path)) = mgr.model_path(id) {
+                                    emit_log("stt", &format!("Found {} at {}, loading...", id, path.display()));
+                                    if let Ok(()) = recognizer.load_model(path.to_str().unwrap_or("")) {
+                                        stt_ready = true;
+                                        emit_log("stt", &format!("{} loaded", id));
+                                        break;
+                                    }
                                 }
-                            } else {
-                                emit_log("stt", "Whisper model not found on disk");
+                            }
+                            if !stt_ready {
+                                emit_log("stt", "No Whisper model found on disk");
                             }
                         }
                     }
@@ -153,15 +198,24 @@ pub fn run() {
                                     );
                                     continue;
                                 }
+                                // Filter known Whisper hallucinations
+                                let text = result.text.trim();
+                                if is_hallucination(text) {
+                                    emit_log(
+                                        "stt",
+                                        &format!("Skipped hallucination: \"{}\"", text),
+                                    );
+                                    continue;
+                                }
                                 emit_log(
                                     "stt",
                                     &format!(
                                         "Recognized ({}): \"{}\"",
                                         result.language.whisper_code(),
-                                        &result.text
+                                        text
                                     ),
                                 );
-                                (result.text, Some(result.language))
+                                (text.to_string(), Some(result.language))
                             }
                             Err(e) => {
                                 emit_log("error", &format!("STT failed: {}", e));
@@ -179,7 +233,7 @@ pub fn run() {
                         )
                     };
 
-                    // Translation: pass through for now (NLLB integration pending)
+                    // Translation: not yet implemented - show empty for translated panel
                     let translated = {
                         let target_lang = lang_state_for_thread
                             .lock()
@@ -190,16 +244,17 @@ pub fn run() {
                             emit_log(
                                 "translate",
                                 &format!(
-                                    "Translation skipped (NLLB model not integrated). Target: {}",
+                                    "Translation not available (NLLB not integrated). Target: {}",
                                     target_lang
                                         .as_ref()
                                         .map(|l| l.whisper_code())
                                         .unwrap_or("?")
                                 ),
                             );
-                            recognized.clone()
+                            // Don't duplicate recognized text - show nothing for translation
+                            String::new()
                         } else {
-                            recognized.clone()
+                            String::new()
                         }
                     };
 
