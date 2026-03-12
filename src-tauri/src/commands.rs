@@ -114,7 +114,7 @@ pub fn get_languages() -> Vec<LanguageInfo> {
 
 #[tauri::command]
 pub fn get_language_settings(
-    lang_state: State<'_, Mutex<LanguageState>>,
+    lang_state: State<'_, Arc<Mutex<LanguageState>>>,
 ) -> Result<LanguageSettings, String> {
     let state = lang_state.lock().map_err(|e| e.to_string())?;
     Ok(LanguageSettings {
@@ -126,7 +126,7 @@ pub fn get_language_settings(
 #[tauri::command]
 pub fn set_source_language(
     code: &str,
-    lang_state: State<'_, Mutex<LanguageState>>,
+    lang_state: State<'_, Arc<Mutex<LanguageState>>>,
 ) -> Result<(), String> {
     let lang = Language::from_whisper_code(code)
         .ok_or_else(|| format!("Unknown language code: {}", code))?;
@@ -137,7 +137,7 @@ pub fn set_source_language(
 #[tauri::command]
 pub fn set_target_language(
     code: &str,
-    lang_state: State<'_, Mutex<LanguageState>>,
+    lang_state: State<'_, Arc<Mutex<LanguageState>>>,
 ) -> Result<(), String> {
     let lang = Language::from_whisper_code(code)
         .ok_or_else(|| format!("Unknown language code: {}", code))?;

@@ -99,8 +99,42 @@ impl AudioPipeline {
 
     pub fn resume(&self) -> AudioResult<()> {
         self.state.lock().transition(PipelineState::Recording)?;
-        // Re-start capture would need callback re-setup
-        // For now, transition state only
+
+        let vad = Arc::clone(&self.vad);
+        let tracker = Arc::clone(&self.segment_tracker);
+        let speech_buffer = Arc::clone(&self.speech_buffer);
+        let sender = self.segment_sender.clone();
+
+        self.capture.lock().start(move |data: &[i16]| {
+            for chunk in data.chunks(480) {
+                if chunk.len() < 480 {
+                    continue;
+                }
+
+                let is_speech = vad.lock().is_speech(chunk).unwrap_or(false);
+                let event = tracker.lock().update(is_speech);
+
+                let mut sb = speech_buffer.lock();
+                match event {
+                    SpeechEvent::SpeechStart => {
+                        sb.on_speech_start();
+                        sb.push_frame(chunk);
+                    }
+                    SpeechEvent::SpeechEnd => {
+                        sb.push_frame(chunk);
+                        if let Some(segment) = sb.on_speech_end() {
+                            let _ = sender.send(segment);
+                        }
+                    }
+                    SpeechEvent::None => {
+                        if tracker.lock().in_speech() {
+                            sb.push_frame(chunk);
+                        }
+                    }
+                }
+            }
+        })?;
+
         Ok(())
     }
 

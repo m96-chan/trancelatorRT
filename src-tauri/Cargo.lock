@@ -4102,6 +4102,7 @@ name = "trancelator-rt"
 version = "0.1.0"
 dependencies = [
  "cpal",
+ "libc",
  "parking_lot",
  "reqwest 0.12.28",
  "ringbuf",

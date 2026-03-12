@@ -4,6 +4,40 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+/// Returns (total_bytes, available_bytes) for the filesystem containing `path`.
+fn get_fs_space(path: &Path) -> ModelResult<(u64, u64)> {
+    use std::ffi::CString;
+
+    // Use parent or fallback to "/" if path doesn't exist yet
+    let check_path = if path.exists() {
+        path.to_path_buf()
+    } else if let Some(parent) = path.parent() {
+        if parent.exists() {
+            parent.to_path_buf()
+        } else {
+            PathBuf::from("/")
+        }
+    } else {
+        PathBuf::from("/")
+    };
+
+    let c_path = CString::new(check_path.to_string_lossy().as_bytes())
+        .map_err(|e| ModelError::Io(e.to_string()))?;
+
+    unsafe {
+        let mut stat: libc::statvfs = std::mem::zeroed();
+        if libc::statvfs(c_path.as_ptr(), &mut stat) != 0 {
+            return Err(ModelError::Io(format!(
+                "statvfs failed: {}",
+                std::io::Error::last_os_error()
+            )));
+        }
+        let total = stat.f_blocks as u64 * stat.f_frsize as u64;
+        let available = stat.f_bavail as u64 * stat.f_frsize as u64;
+        Ok((total, available))
+    }
+}
+
 pub trait Storage: Send {
     fn models_dir(&self) -> &Path;
     fn model_path(&self, filename: &str) -> PathBuf;
@@ -48,13 +82,11 @@ impl Storage for FileStorage {
     }
 
     fn available_space(&self) -> ModelResult<u64> {
-        // TODO: Use platform-specific API (statvfs on Android) for accurate values
-        // For now, return a reasonable default
-        Ok(10_000_000_000) // 10GB
+        get_fs_space(&self.base_dir).map(|(_, available)| available)
     }
 
     fn total_space(&self) -> ModelResult<u64> {
-        Ok(64_000_000_000) // 64GB
+        get_fs_space(&self.base_dir).map(|(total, _)| total)
     }
 
     fn file_size(&self, filename: &str) -> u64 {
