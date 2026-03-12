@@ -129,11 +129,28 @@ pub fn run() {
 
                 while let Ok(segment) = segment_rx.recv() {
                     segment_count += 1;
+
+                    // Drain queued segments - only process the latest one
+                    let mut latest_segment = segment;
+                    let mut skipped = 0u32;
+                    while let Ok(newer) = segment_rx.try_recv() {
+                        latest_segment = newer;
+                        skipped += 1;
+                        segment_count += 1;
+                    }
+                    if skipped > 0 {
+                        emit_log(
+                            "vad",
+                            &format!("Skipped {} queued segments (too slow), using latest", skipped),
+                        );
+                    }
+
+                    let segment = latest_segment;
                     let duration_ms = segment.len() as f64 / 16.0;
                     emit_log(
                         "vad",
                         &format!(
-                            "Speech segment #{} received ({:.0}ms, {} samples)",
+                            "Speech segment #{} ({:.0}ms, {} samples)",
                             segment_count, duration_ms, segment.len()
                         ),
                     );
