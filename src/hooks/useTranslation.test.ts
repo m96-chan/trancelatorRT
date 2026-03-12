@@ -22,6 +22,7 @@ describe("useTranslation", () => {
     expect(state.transcriptionText).toBe("");
     expect(state.translationText).toBe("");
     expect(state.error).toBeNull();
+    expect(state.pipelineLogs).toEqual([]);
   });
 
   it("setSourceLanguage updates state and calls invoke", () => {

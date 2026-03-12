@@ -1,6 +1,12 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import type { PipelineState } from "../types";
+
+export interface LogEntry {
+  stage: string;
+  message: string;
+  timestamp: number;
+}
 
 export interface TranslationState {
   sourceLanguage: string;
@@ -9,6 +15,7 @@ export interface TranslationState {
   transcriptionText: string;
   translationText: string;
   error: string | null;
+  pipelineLogs: LogEntry[];
 }
 
 export interface TranslationActions {
@@ -29,6 +36,13 @@ interface TranscriptionResult {
   translated: string;
 }
 
+interface PipelineLogEvent {
+  stage: string;
+  message: string;
+}
+
+const MAX_LOG_ENTRIES = 100;
+
 export function useTranslation(
   invoke: TauriInvoke,
 ): [TranslationState, TranslationActions] {
@@ -38,6 +52,24 @@ export function useTranslation(
   const [transcriptionText, setTranscriptionText] = useState("");
   const [translationText, setTranslationText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pipelineLogs, setPipelineLogs] = useState<LogEntry[]>([]);
+  const logsRef = useRef<LogEntry[]>([]);
+
+  useEffect(() => {
+    const unlistenLog = listen<PipelineLogEvent>("pipeline-log", (event) => {
+      const entry: LogEntry = {
+        stage: event.payload.stage,
+        message: event.payload.message,
+        timestamp: Date.now(),
+      };
+      const updated = [...logsRef.current, entry].slice(-MAX_LOG_ENTRIES);
+      logsRef.current = updated;
+      setPipelineLogs(updated);
+    });
+    return () => {
+      unlistenLog.then((fn) => fn());
+    };
+  }, []);
 
   useEffect(() => {
     const unlisten = listen<TranscriptionResult>(
@@ -97,6 +129,8 @@ export function useTranslation(
       setError(null);
       setTranscriptionText("");
       setTranslationText("");
+      logsRef.current = [];
+      setPipelineLogs([]);
       await invoke("start_recording");
       setPipelineState("Recording");
     } catch (e) {
@@ -126,6 +160,7 @@ export function useTranslation(
     transcriptionText,
     translationText,
     error,
+    pipelineLogs,
   };
 
   const actions: TranslationActions = {

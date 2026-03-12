@@ -5,7 +5,7 @@ mod pipeline;
 
 use audio::capture::CaptureConfig;
 use audio::AudioPipeline;
-use commands::{LanguageState, TranscriptionResult};
+use commands::{LanguageState, PipelineLog, TranscriptionResult};
 use model::downloader::HttpDownloader;
 use model::registry::ModelRegistry;
 use model::storage::FileStorage;
@@ -57,33 +57,60 @@ pub fn run() {
             let app_handle = app.handle().clone();
 
             std::thread::spawn(move || {
+                let emit_log = |stage: &str, message: &str| {
+                    let _ = app_handle.emit(
+                        "pipeline-log",
+                        PipelineLog {
+                            stage: stage.to_string(),
+                            message: message.to_string(),
+                        },
+                    );
+                };
+
                 // Initialize Whisper recognizer
                 let mut recognizer = WhisperRecognizer::new();
                 let mut stt_ready = false;
 
-                if let Some(path) = whisper_model_path {
+                if let Some(path) = &whisper_model_path {
+                    emit_log("init", &format!("Loading Whisper model: {}", path.display()));
                     match recognizer.load_model(path.to_str().unwrap_or("")) {
                         Ok(()) => {
                             stt_ready = true;
-                            eprintln!("[trancelatorRT] Whisper model loaded successfully");
+                            emit_log("init", "Whisper model loaded successfully");
                         }
                         Err(e) => {
-                            eprintln!("[trancelatorRT] Failed to load Whisper model: {}", e);
+                            emit_log("error", &format!("Failed to load Whisper: {}", e));
                         }
                     }
                 } else {
-                    eprintln!("[trancelatorRT] Whisper model not downloaded yet, using stub STT");
+                    emit_log("init", "Whisper model not downloaded. Download from Models panel.");
                 }
 
+                let mut segment_count = 0u32;
+
                 while let Ok(segment) = segment_rx.recv() {
+                    segment_count += 1;
+                    let duration_ms = segment.len() as f64 / 16.0;
+                    emit_log(
+                        "vad",
+                        &format!(
+                            "Speech segment #{} received ({:.0}ms, {} samples)",
+                            segment_count, duration_ms, segment.len()
+                        ),
+                    );
+
                     // Try to load model if not ready (user may have downloaded it after startup)
                     if !stt_ready {
+                        emit_log("stt", "Whisper not loaded, checking for model...");
                         if let Ok(mgr) = model_manager_for_thread.lock() {
                             if let Ok(Some(path)) = mgr.model_path("whisper-tiny") {
+                                emit_log("stt", &format!("Found model at {}, loading...", path.display()));
                                 if let Ok(()) = recognizer.load_model(path.to_str().unwrap_or("")) {
                                     stt_ready = true;
-                                    eprintln!("[trancelatorRT] Whisper model loaded (lazy)");
+                                    emit_log("stt", "Whisper model loaded (lazy)");
                                 }
+                            } else {
+                                emit_log("stt", "Whisper model not found on disk");
                             }
                         }
                     }
@@ -94,6 +121,17 @@ pub fn run() {
                             .lock()
                             .ok()
                             .map(|s| s.source.clone());
+
+                        emit_log(
+                            "stt",
+                            &format!(
+                                "Transcribing with Whisper (lang: {})...",
+                                source_lang
+                                    .as_ref()
+                                    .map(|l| l.whisper_code())
+                                    .unwrap_or("auto")
+                            ),
+                        );
 
                         let stt_config = SttConfig {
                             n_threads: 4,
@@ -106,17 +144,32 @@ pub fn run() {
                         match recognizer.transcribe(&segment, &stt_config) {
                             Ok(result) => {
                                 if result.no_speech_probability > 0.6 || result.text.trim().is_empty() {
-                                    continue; // Skip silence/noise
+                                    emit_log(
+                                        "stt",
+                                        &format!(
+                                            "Skipped: no speech (prob={:.2})",
+                                            result.no_speech_probability
+                                        ),
+                                    );
+                                    continue;
                                 }
+                                emit_log(
+                                    "stt",
+                                    &format!(
+                                        "Recognized ({}): \"{}\"",
+                                        result.language.whisper_code(),
+                                        &result.text
+                                    ),
+                                );
                                 (result.text, Some(result.language))
                             }
                             Err(e) => {
-                                eprintln!("[trancelatorRT] STT error: {}", e);
+                                emit_log("error", &format!("STT failed: {}", e));
                                 continue;
                             }
                         }
                     } else {
-                        let duration_ms = segment.len() as f64 / 16.0;
+                        emit_log("stt", "No Whisper model - cannot transcribe");
                         (
                             format!(
                                 "[Whisper model not loaded - speech {:.0}ms detected. Download model in Settings.]",
@@ -128,19 +181,29 @@ pub fn run() {
 
                     // Translation: pass through for now (NLLB integration pending)
                     let translated = {
-                        let _target_lang = lang_state_for_thread
+                        let target_lang = lang_state_for_thread
                             .lock()
                             .ok()
                             .map(|s| s.target.clone());
 
-                        // TODO: Wire NllbTranslator when ort + tokenizer integration is complete
-                        // For now, indicate that translation is pending
                         if detected_lang.is_some() {
-                            format!("[Translation pending NLLB model] {}", &recognized)
+                            emit_log(
+                                "translate",
+                                &format!(
+                                    "Translation skipped (NLLB model not integrated). Target: {}",
+                                    target_lang
+                                        .as_ref()
+                                        .map(|l| l.whisper_code())
+                                        .unwrap_or("?")
+                                ),
+                            );
+                            recognized.clone()
                         } else {
                             recognized.clone()
                         }
                     };
+
+                    emit_log("emit", "Sending result to UI");
 
                     let _ = app_handle.emit(
                         "transcription-result",

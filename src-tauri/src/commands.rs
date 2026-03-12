@@ -14,6 +14,12 @@ pub struct TranscriptionResult {
 }
 
 #[derive(Clone, serde::Serialize)]
+pub struct PipelineLog {
+    pub stage: String,
+    pub message: String,
+}
+
+#[derive(Clone, serde::Serialize)]
 pub struct DownloadProgress {
     pub id: String,
     pub downloaded: u64,

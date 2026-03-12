@@ -4,6 +4,7 @@ import { LanguageSelector } from "./components/LanguageSelector";
 import { RecordButton } from "./components/RecordButton";
 import { TextDisplay } from "./components/TextDisplay";
 import { PipelineStatus } from "./components/PipelineStatus";
+import { PipelineLog } from "./components/PipelineLog";
 import { ModelManagerPanel } from "./components/ModelManager";
 import { useTranslation } from "./hooks/useTranslation";
 import { useModelManager } from "./hooks/useModelManager";
@@ -78,6 +79,8 @@ function App() {
               language={state.targetLanguage}
             />
           </div>
+
+          <PipelineLog entries={state.pipelineLogs} />
 
           <div className="language-hint">
             {LANGUAGE_LABELS[state.sourceLanguage]} &rarr;{" "}
