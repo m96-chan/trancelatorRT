@@ -167,10 +167,12 @@ pub fn run() {
                             .ok()
                             .map(|s| s.source.clone());
 
+                        let audio_duration_sec = segment.len() as f64 / 16000.0;
                         emit_log(
                             "stt",
                             &format!(
-                                "Transcribing with Whisper (lang: {})...",
+                                "Transcribing {:.1}s audio (lang: {})...",
+                                audio_duration_sec,
                                 source_lang
                                     .as_ref()
                                     .map(|l| l.whisper_code())
@@ -186,13 +188,20 @@ pub fn run() {
                             ..SttConfig::default()
                         };
 
-                        match recognizer.transcribe(&segment, &stt_config) {
+                        let start = std::time::Instant::now();
+                        let transcribe_result = recognizer.transcribe(&segment, &stt_config);
+                        let elapsed = start.elapsed();
+
+                        match transcribe_result {
                             Ok(result) => {
+                                let speed_ratio = audio_duration_sec / elapsed.as_secs_f64();
                                 if result.no_speech_probability > 0.6 || result.text.trim().is_empty() {
                                     emit_log(
                                         "stt",
                                         &format!(
-                                            "Skipped: no speech (prob={:.2})",
+                                            "No speech ({:.1}s, {:.1}x realtime, prob={:.2})",
+                                            elapsed.as_secs_f64(),
+                                            speed_ratio,
                                             result.no_speech_probability
                                         ),
                                     );
@@ -203,14 +212,20 @@ pub fn run() {
                                 if is_hallucination(text) {
                                     emit_log(
                                         "stt",
-                                        &format!("Skipped hallucination: \"{}\"", text),
+                                        &format!(
+                                            "Hallucination filtered ({:.1}s): \"{}\"",
+                                            elapsed.as_secs_f64(),
+                                            text
+                                        ),
                                     );
                                     continue;
                                 }
                                 emit_log(
                                     "stt",
                                     &format!(
-                                        "Recognized ({}): \"{}\"",
+                                        "OK ({:.1}s, {:.1}x realtime, {}): \"{}\"",
+                                        elapsed.as_secs_f64(),
+                                        speed_ratio,
                                         result.language.whisper_code(),
                                         text
                                     ),
@@ -218,7 +233,7 @@ pub fn run() {
                                 (text.to_string(), Some(result.language))
                             }
                             Err(e) => {
-                                emit_log("error", &format!("STT failed: {}", e));
+                                emit_log("error", &format!("STT failed ({:.1}s): {}", elapsed.as_secs_f64(), e));
                                 continue;
                             }
                         }
