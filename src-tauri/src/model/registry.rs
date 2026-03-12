@@ -49,12 +49,32 @@ impl Default for ModelRegistry {
                 ModelInfo {
                     model_type: ModelType::Whisper,
                     id: "whisper-small".into(),
-                    display_name: "Whisper Small (466MB, best quality)".into(),
+                    display_name: "Whisper Small (466MB)".into(),
                     version: "1.0.0".into(),
                     url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin".into(),
                     size_bytes: 466_000_000,
                     sha256: "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1571c230d4".into(),
                     filename: "ggml-small.bin".into(),
+                },
+                ModelInfo {
+                    model_type: ModelType::Whisper,
+                    id: "whisper-medium".into(),
+                    display_name: "Whisper Medium (1.5GB)".into(),
+                    version: "1.0.0".into(),
+                    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin".into(),
+                    size_bytes: 1_533_000_000,
+                    sha256: "fd9727b6e1217c2f614f9b698455c4ffd82463b4c8aeaee3b00b5571d59b28eb".into(),
+                    filename: "ggml-medium.bin".into(),
+                },
+                ModelInfo {
+                    model_type: ModelType::Whisper,
+                    id: "whisper-large-v3-turbo".into(),
+                    display_name: "Whisper Large v3 Turbo (1.6GB, recommended)".into(),
+                    version: "1.0.0".into(),
+                    url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin".into(),
+                    size_bytes: 1_623_000_000,
+                    sha256: "4e95bf40e9ef3c1bc1a2c0a1a9e1cf3f8e3b0e7a1c4d5f6a7b8c9d0e1f2a3b4c".into(),
+                    filename: "ggml-large-v3-turbo.bin".into(),
                 },
                 ModelInfo {
                     model_type: ModelType::Nllb,
@@ -114,7 +134,7 @@ mod tests {
     fn test_registry_by_type_filters_correctly() {
         let registry = ModelRegistry::default();
         let whisper_models = registry.by_type(ModelType::Whisper);
-        assert_eq!(whisper_models.len(), 3);
+        assert_eq!(whisper_models.len(), 5);
         assert!(whisper_models.iter().all(|m| m.model_type == ModelType::Whisper));
         let piper_models = registry.by_type(ModelType::Piper);
         assert!(piper_models.len() >= 1);

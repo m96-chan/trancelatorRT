@@ -76,7 +76,7 @@ pub fn run() {
             let model_manager = ModelManager::new(registry, downloader, storage);
 
             // Pick the best available Whisper model (prefer larger)
-            let whisper_models = ["whisper-small", "whisper-base", "whisper-tiny"];
+            let whisper_models = ["whisper-large-v3-turbo", "whisper-medium", "whisper-small", "whisper-base", "whisper-tiny"];
             let whisper_model_path = whisper_models
                 .iter()
                 .find_map(|id| {
@@ -143,7 +143,7 @@ pub fn run() {
                         emit_log("stt", "Whisper not loaded, checking for model...");
                         if let Ok(mgr) = model_manager_for_thread.lock() {
                             // Try best model first
-                            let models = ["whisper-small", "whisper-base", "whisper-tiny"];
+                            let models = ["whisper-large-v3-turbo", "whisper-medium", "whisper-small", "whisper-base", "whisper-tiny"];
                             for id in &models {
                                 if let Ok(Some(path)) = mgr.model_path(id) {
                                     emit_log("stt", &format!("Found {} at {}, loading...", id, path.display()));
