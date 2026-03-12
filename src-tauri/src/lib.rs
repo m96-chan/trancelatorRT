@@ -31,6 +31,12 @@ fn is_hallucination(text: &str) -> bool {
         "see you next time",
         "subtitles by",
         "translated by",
+        "blank audio",
+        "music playing",
+        "music",
+        "[music]",
+        "(music)",
+        "you",
         "www.",
         "http",
     ];

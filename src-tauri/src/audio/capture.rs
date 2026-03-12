@@ -16,6 +16,44 @@ impl Default for CaptureConfig {
     }
 }
 
+/// Downsample from `src_rate` to `dst_rate` using linear interpolation.
+fn resample(samples: &[i16], src_rate: u32, dst_rate: u32) -> Vec<i16> {
+    if src_rate == dst_rate {
+        return samples.to_vec();
+    }
+    let ratio = src_rate as f64 / dst_rate as f64;
+    let out_len = (samples.len() as f64 / ratio) as usize;
+    let mut output = Vec::with_capacity(out_len);
+    for i in 0..out_len {
+        let src_pos = i as f64 * ratio;
+        let idx = src_pos as usize;
+        let frac = src_pos - idx as f64;
+        let s0 = samples[idx] as f64;
+        let s1 = if idx + 1 < samples.len() {
+            samples[idx + 1] as f64
+        } else {
+            s0
+        };
+        output.push((s0 + frac * (s1 - s0)) as i16);
+    }
+    output
+}
+
+/// Convert multi-channel audio to mono by averaging channels.
+fn to_mono(samples: &[i16], channels: u16) -> Vec<i16> {
+    if channels <= 1 {
+        return samples.to_vec();
+    }
+    let ch = channels as usize;
+    samples
+        .chunks(ch)
+        .map(|frame| {
+            let sum: i32 = frame.iter().map(|&s| s as i32).sum();
+            (sum / ch as i32) as i16
+        })
+        .collect()
+}
+
 pub struct AudioCapture {
     stream: Option<cpal::Stream>,
     config: CaptureConfig,
@@ -49,38 +87,60 @@ impl AudioCapture {
             .map_err(|e| AudioError::StreamError(e.to_string()))?;
 
         let sample_format = default_config.sample_format();
+        let device_rate = default_config.sample_rate().0;
+        let device_channels = default_config.channels();
+        let target_rate = self.config.sample_rate;
         let stream_config: cpal::StreamConfig = default_config.into();
+
+        eprintln!(
+            "[capture] Device: {}Hz {}ch {:?} → target {}Hz mono",
+            device_rate, device_channels, sample_format, target_rate
+        );
 
         let err_callback = |err: cpal::StreamError| {
             eprintln!("Audio stream error: {}", err);
         };
 
+        // Closure to convert device audio to 16kHz mono i16
+        let process_audio = move |mono_i16: Vec<i16>| {
+            let resampled = resample(&mono_i16, device_rate, target_rate);
+            callback(&resampled);
+        };
+
         // Build stream matching the device's native sample format
         let stream = match sample_format {
-            SampleFormat::I16 => device
-                .build_input_stream(
-                    &stream_config,
-                    move |data: &[i16], _: &cpal::InputCallbackInfo| {
-                        callback(data);
-                    },
-                    err_callback,
-                    None,
-                )
-                .map_err(|e| AudioError::StreamError(e.to_string()))?,
-            SampleFormat::F32 => device
-                .build_input_stream(
-                    &stream_config,
-                    move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                        let i16_data: Vec<i16> = data
-                            .iter()
-                            .map(|&s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
-                            .collect();
-                        callback(&i16_data);
-                    },
-                    err_callback,
-                    None,
-                )
-                .map_err(|e| AudioError::StreamError(e.to_string()))?,
+            SampleFormat::I16 => {
+                let mut process = process_audio;
+                device
+                    .build_input_stream(
+                        &stream_config,
+                        move |data: &[i16], _: &cpal::InputCallbackInfo| {
+                            let mono = to_mono(data, device_channels);
+                            process(mono);
+                        },
+                        err_callback,
+                        None,
+                    )
+                    .map_err(|e| AudioError::StreamError(e.to_string()))?
+            }
+            SampleFormat::F32 => {
+                let mut process = process_audio;
+                device
+                    .build_input_stream(
+                        &stream_config,
+                        move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                            let i16_data: Vec<i16> = data
+                                .iter()
+                                .map(|&s| (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
+                                .collect();
+                            let mono = to_mono(&i16_data, device_channels);
+                            process(mono);
+                        },
+                        err_callback,
+                        None,
+                    )
+                    .map_err(|e| AudioError::StreamError(e.to_string()))?
+            }
             _ => {
                 return Err(AudioError::StreamError(format!(
                     "Unsupported sample format: {:?}",
